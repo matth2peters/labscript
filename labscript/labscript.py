@@ -831,15 +831,16 @@ class Pseudoclock(Device):
                                          'One or more connected devices on ClockLine %s cannot support update delays shorter than %s sec.'%(clock_line.name, str(1.0/clock_line.clock_limit)))
                                          
                 all_change_times_len = len(all_change_times)
+                # THIS WAS IMPLEMENTED TO FIX A NOVATECH DDS ISSUE, WHICH IS NOT APPLICABLE TO RYDBERG LAB
                 # increment j until we reach the current time
-                while all_change_times[j] < t and j < all_change_times_len-1:
-                    j += 1
-                # j should now index all_change_times at "t"
-                # Check that the next all change_time is not too close (and thus would force this clock tick to be faster than the clock_limit)
-                dt = all_change_times[j+1] - t
-                if dt < 1.0/clock_line.clock_limit:
-                    raise LabscriptError('Commands have been issued to devices attached to %s at t= %s s and %s s. '%(self.name, str(t),str(all_change_times[j+1])) +
-                                         'One or more connected devices on ClockLine %s cannot support update delays shorter than %s sec.'%(clock_line.name, str(1.0/clock_line.clock_limit)))
+                # while all_change_times[j] < t and j < all_change_times_len-1:
+                #     j += 1
+                # # j should now index all_change_times at "t"
+                # # Check that the next all change_time is not too close (and thus would force this clock tick to be faster than the clock_limit)
+                # dt = all_change_times[j+1] - t
+                # if dt < 1.0/clock_line.clock_limit:
+                #     raise LabscriptError('Commands have been issued to devices attached to %s at t= %s s and %s s. '%(self.name, str(t),str(all_change_times[j+1])) +
+                #                          'One or more connected devices on ClockLine %s cannot support update delays shorter than %s sec.'%(clock_line.name, str(1.0/clock_line.clock_limit)))
             
             # Also add the stop time as as change time. First check that it isn't too close to the time of the last instruction:
             if not self.parent_device.stop_time in change_time_list:
@@ -1974,178 +1975,6 @@ class AnalogQuantity(Output):
                                      'initial time': t, 'end time': t + truncation*duration, 'clock rate': samplerate, 'units': units})
         return truncation*duration
 
-    def square_wave(self, t, duration, amplitude, frequency, phase, offset,
-                    duty_cycle, samplerate, units=None, truncation=1.):
-        """A standard square wave.
-
-        This method generates a square wave which starts HIGH (when its phase is
-        zero) then transitions to/from LOW at the specified `frequency` in Hz.
-        The `amplitude` parameter specifies the peak-to-peak amplitude of the
-        square wave which is centered around `offset`. For example, setting
-        `amplitude=1` and `offset=0` would give a square wave which transitions
-        between `0.5` and `-0.5`. Similarly, setting `amplitude=2` and
-        `offset=3` would give a square wave which transitions between `4` and
-        `2`. To instead specify the HIGH/LOW levels directly, use
-        `square_wave_levels()`.
-
-        Note that because the transitions of a square wave are sudden and
-        discontinuous, small changes in timings (e.g. due to numerical rounding
-        errors) can affect the output value. This is particularly relevant at
-        the end of the waveform, as the final output value may be different than
-        expected if the end of the waveform is close to an edge of the square
-        wave. Care is taken in the implementation of this method to avoid such
-        effects, but it still may be desirable to call `constant()` after
-        `square_wave()` to ensure a particular final value. The output value may
-        also be different than expected at certain moments in the middle of the
-        waveform due to the finite samplerate (which may be different than the
-        requested `samplerate`), particularly if the actual samplerate is not a
-        multiple of `frequency`.
-
-        Args:
-            t (float): The time at which to start the square wave.
-            duration (float): The duration for which to output a square wave
-                when `truncation` is set to `1`. When `truncation` is set to a
-                value less than `1`, the actual duration will be shorter than
-                `duration` by that factor.
-            amplitude (float): The peak-to-peak amplitude of the square wave.
-                See above for an example of how to calculate the HIGH/LOW output
-                values given the `amplitude` and `offset` values.
-            frequency (float): The frequency of the square wave, in Hz.
-            phase (float): The initial phase of the square wave. Note that the
-                square wave is defined such that the phase goes from 0 to 1 (NOT
-                2 pi) over one cycle, so setting `phase=0.5` will start the
-                square wave advanced by 1/2 of a cycle. Setting `phase` equal to
-                `duty_cycle` will cause the waveform to start LOW rather than
-                HIGH.
-            offset (float): The offset of the square wave, which is the value
-                halfway between the LOW and HIGH output values. Note that this
-                is NOT the LOW output value; setting `offset` to `0` will cause
-                the HIGH/LOW values to be symmetrically split around `0`. See
-                above for an example of how to calculate the HIGH/LOW output
-                values given the `amplitude` and `offset` values.
-            duty_cycle (float): The fraction of the cycle for which the output
-                should be HIGH. This should be a number between zero and one
-                inclusively. For example, setting `duty_cycle=0.1` will
-                create a square wave which outputs HIGH over 10% of the
-                cycle and outputs LOW over 90% of the cycle.
-            samplerate (float): The requested rate at which to update the output
-                value. Note that the actual samplerate used may be different if,
-                for example, another output of the same device has a
-                simultaneous ramp with a different requested `samplerate`, or if
-                `1 / samplerate` isn't an integer multiple of the pseudoclock's
-                timing resolution.
-            units (str, optional): The units of the output values. If set to
-                `None` then the output's base units will be used. Defaults to
-                `None`.
-            truncation (float, optional): The actual duration of the square wave
-                will be `duration * truncation` and `truncation` must be set to
-                a value in the range [0, 1] (inclusively). Set to `1` to output
-                the full duration of the square wave. Setting it to `0` will
-                skip the square wave entirely. Defaults to `1.`.
-
-        Returns:
-            duration (float): The actual duration of the square wave, accounting
-                for `truncation`.
-        """
-        # Convert to values used by square_wave_levels, then call that method.
-        level_0 = offset + 0.5 * amplitude
-        level_1 = offset - 0.5 * amplitude
-        return self.square_wave_levels(
-            t,
-            duration,
-            level_0,
-            level_1,
-            frequency,
-            phase,
-            duty_cycle,
-            samplerate,
-            units,
-            truncation,
-        )
-
-    def square_wave_levels(self, t, duration, level_0, level_1, frequency,
-                           phase, duty_cycle, samplerate, units=None,
-                           truncation=1.):
-        """A standard square wave.
-
-        This method generates a square wave which starts at `level_0` (when its
-        phase is zero) then transitions to/from `level_1` at the specified
-        `frequency`. This is the same waveform output by `square_wave()`, but
-        parameterized differently. See that method's docstring for more
-        information.
-
-        Args:
-            t (float): The time at which to start the square wave.
-            duration (float): The duration for which to output a square wave
-                when `truncation` is set to `1`. When `truncation` is set to a
-                value less than `1`, the actual duration will be shorter than
-                `duration` by that factor.
-            level_0 (float): The initial level of the square wave, when the
-                phase is zero.
-            level_1 (float): The other level of the square wave.
-            frequency (float): The frequency of the square wave, in Hz.
-            phase (float): The initial phase of the square wave. Note that the
-                square wave is defined such that the phase goes from 0 to 1 (NOT
-                2 pi) over one cycle, so setting `phase=0.5` will start the
-                square wave advanced by 1/2 of a cycle. Setting `phase` equal to
-                `duty_cycle` will cause the waveform to start at `level_1`
-                rather than `level_0`.
-            duty_cycle (float): The fraction of the cycle for which the output
-                should be set to `level_0`. This should be a number between zero
-                and one inclusively. For example, setting `duty_cycle=0.1` will
-                create a square wave which outputs `level_0` over 10% of the
-                cycle and outputs `level_1` over 90% of the cycle.
-            samplerate (float): The requested rate at which to update the output
-                value. Note that the actual samplerate used may be different if,
-                for example, another output of the same device has a
-                simultaneous ramp with a different requested `samplerate`, or if
-                `1 / samplerate` isn't an integer multiple of the pseudoclock's
-                timing resolution.
-            units (str, optional): The units of the output values. If set to
-                `None` then the output's base units will be used. Defaults to
-                `None`.
-            truncation (float, optional): The actual duration of the square wave
-                will be `duration * truncation` and `truncation` must be set to
-                a value in the range [0, 1] (inclusively). Set to `1` to output
-                the full duration of the square wave. Setting it to `0` will
-                skip the square wave entirely. Defaults to `1.`.
-
-        Returns:
-            duration (float): The actual duration of the square wave, accounting
-                for `truncation`.
-        """
-        # Check the argument values.
-        self._check_truncation(truncation)
-        if duty_cycle < 0 or duty_cycle > 1:
-            msg = """Square wave duty cycle must be in the range [0, 1]
-                (inclusively) but was set to {duty_cycle}.""".format(
-                duty_cycle=duty_cycle
-            )
-            raise LabscriptError(dedent(msg))
-
-        if truncation > 0:
-            # Add the instruction.
-            func = functions.square_wave(
-                round(t + duration, 10) - round(t, 10),
-                level_0,
-                level_1,
-                frequency,
-                phase,
-                duty_cycle,
-            )
-            self.add_instruction(
-                t,
-                {
-                    'function': func,
-                    'description': 'square wave',
-                    'initial time': t,
-                    'end time': t + truncation * duration,
-                    'clock rate': samplerate,
-                    'units': units,
-                }
-            )
-        return truncation * duration
-
     def customramp(self, t, duration, function, *args, **kwargs):
         """Define a custom function for the output.
 
@@ -3147,17 +2976,12 @@ def generate_connection_table(hdf5_file):
             #if there is no BLACS connection, make sure there is no "gui" or "worker" entry in the connection table properties
             if 'worker' in properties or 'gui' in properties:
                 raise LabscriptError('You cannot specify a remote GUI or worker for a device (%s) that does not have a tab in BLACS'%(device.name))
-          
-        if getattr(device, 'unit_conversion_class', None) is not None:
-            c = device.unit_conversion_class
-            unit_conversion_class_repr = f"{c.__module__}.{c.__name__}"
-        else:
-            unit_conversion_class_repr = repr(None)
-
+            
+            
         connection_table.append((device.name, device.__class__.__name__,
                                  device.parent_device.name if device.parent_device else str(None),
                                  str(device.connection if device.parent_device else str(None)),
-                                 unit_conversion_class_repr,
+                                 device.unit_conversion_class.__name__ if hasattr(device,"unit_conversion_class") and device.unit_conversion_class is not None else str(None),
                                  serialised_unit_conversion_parameters,
                                  BLACS_connection,
                                  serialised_properties))
