@@ -894,23 +894,25 @@ class Pseudoclock(Device):
                 # increment j until we reach the current time
                 while all_change_times[j] < t and j < all_change_times_len-1:
                     j += 1
+
+                # THIS WAS IMPLEMENTED TO FIX A NOVATECH DDS ISSUE, WHICH IS NOT APPLICABLE US
                 # j should now index all_change_times at "t"
                 # Check that the next all change_time is not too close (and thus
                 # would force this clock tick to be faster than the minimum
                 # clock high time)
-                dt = all_change_times[j+1] - t
-                if dt < (2 * clock_line.minimum_clock_high_time):
-                    raise LabscriptError(
-                        "Commands have been issued to devices attached to "
-                        f"{self.name} at t={t} and t={all_change_times[j+1]}. "
-                        "One or more connected devices on ClockLine "
-                        f"{clock_line.name} cannot support clock ticks with a "
-                        "digital high time shorter than "
-                        f"{clock_line.minimum_clock_high_time} which is more "
-                        "than half the available time between the event at "
-                        f"t={t} on ClockLine {clock_line.name} and the next "
-                        "event on another ClockLine."
-                    )
+                # dt = all_change_times[j+1] - t
+                # if dt < (2 * clock_line.minimum_clock_high_time):
+                #     raise LabscriptError(
+                #         "Commands have been issued to devices attached to "
+                #         f"{self.name} at t={t} and t={all_change_times[j+1]}. "
+                #         "One or more connected devices on ClockLine "
+                #         f"{clock_line.name} cannot support clock ticks with a "
+                #         "digital high time shorter than "
+                #         f"{clock_line.minimum_clock_high_time} which is more "
+                #         "than half the available time between the event at "
+                #         f"t={t} on ClockLine {clock_line.name} and the next "
+                #         "event on another ClockLine."
+                #     )
 
             # because we made the list into a set and back to a list, it is now
             # a different object so modifying it won't update the list in the
